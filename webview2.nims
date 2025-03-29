@@ -1,1 +1,0 @@
-switch("passl", "-lole32 -lcomctl32 -lcomdlg32 -loleaut32 -luuid -lgdi32")
