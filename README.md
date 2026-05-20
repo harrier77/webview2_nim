@@ -1,20 +1,23 @@
 # webview2_nim
 
+> **Based on [bung87/webview2](https://github.com/bung87/webview2)** — this project is a fork/adaptation of bung87's pure-Nim WebView2 COM wrapper. The low-level COM bindings, WebView2 loader, and environment/controller handlers originate from that repository.
+
 **Minimal, pure Nim WebView2 wrapper for Windows. No Electron. No C dependencies. Just copy and use.**
 
-`webview2_nim` is a thin, hand-crafted wrapper around the WebView2 COM API written from scratch in Nim — nothing but the standard library and `winim`. It lets you build GUI applications using web technologies (HTML/CSS/JS) rendered by Microsoft Edge WebView2, without pulling in Electron, CEF, or even the otherwise excellent `webview` library by zserge (which depends on a C glue layer and external DLLs).
+`webview2_nim` is a thin wrapper around the WebView2 COM API built on top of [bung87/webview2](https://github.com/bung87/webview2) — nothing but the standard library and `winim`. It lets you build GUI applications using web technologies (HTML/CSS/JS) rendered by Microsoft Edge WebView2, without pulling in Electron, CEF, or even the otherwise excellent `webview` library by zserge (which depends on a C glue layer and external DLLs).
 
 The philosophy: **import the code directly, call a few procs, and you're done.**
 
 ## Why this exists
 
-Every other WebView2 binding for Nim either:
+This project builds upon [bung87/webview2](https://github.com/bung87/webview2), which provides pure-Nim COM bindings for the WebView2 API without any C glue layer.
 
-- Depends on a C intermediate library (like `webview` by zserge), adding build complexity and external DLLs.
-- Requires heavy frameworks that defeat the purpose of a lightweight web UI.
-- Is tightly coupled to a particular application pattern.
+The main differences from other Nim WebView2 wrappers:
 
-`webview2_nim` is different: you copy `platforms/` into your project, `import miowv`, call `mio_new_webview` + `run`, and you have a window with a WebView2 inside — full control, zero bloat.
+- **No C intermediate library** — unlike `webview` by zserge, there's no external C layer or additional DLLs to ship.
+- **No heavy frameworks** — just the WebView2 COM API wrapped in Nim with `winim`.
+- **Copy and use** — drop `platforms/` into your project, `import miowv`, call `mio_new_webview` + `run`, and you have a window with a WebView2 inside.
+- **Async bridge** — the `bindProcs` macro and callback infrastructure add optional Nim↔JS communication on top of the base wrapper.
 
 ## How it works
 
@@ -107,20 +110,19 @@ w.mio_move_client(w, 62)  # make room for the toolbar
 
 ```
 ├── miowv.nim                 # Public API — import this
-├── nim.cfg                   # Build config (threads:on, release)
 ├── static/
 │   └── index.html            # Bundled default UI (compiled into your exe)
 ├── platforms/
 │   ├── win/
 │   │   ├── miowebview2.nim   # Proc implementations (run, eval, navigate, …)
 │   │   ├── dpi_util.nim      # DPI awareness helper
-│   │   └── webview2/         # Low‑level COM wrappers for WebView2
+│   │   └── webview2/         # Low‑level COM wrappers for WebView2 (from bung87/webview2)
 │   │       ├── types.nim     # WebViewObj, WebViewPrivObj
 │   │       ├── controllers.nim # Environment & controller creation
 │   │       ├── com/          # COM vtbl definitions for all WebView2 interfaces
-│   │       ├── …
-│   │       └── com/README.md # COM wrapper documentation
-│   └── macos/                # Inactive — kept for future reference
+│   │       ├── loader.nim    # WebView2 runtime loader
+│   │       └── …
+│   └── macos/                # macOS stubs (experimental, from bung87/webview2)
 └── miowv.exe                 # Demo binary (not tracked)
 ```
 
