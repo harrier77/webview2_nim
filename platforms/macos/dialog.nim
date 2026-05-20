@@ -1,3 +1,4 @@
+import objc_runtime
 import darwin / [objc/runtime, foundation, app_kit, objc/blocks]
 import ./dialog_types
 
@@ -7,30 +8,25 @@ type DialogType = enum
   error = 2
 
 proc basicDialog(title: string; description: string; dt: DialogType) =
-  let alert = NSAlert.alloc().init()
-
-  # Handling different alert types (info, warning, error)
-  case dt:
-    of info:
-      alert.setAlertStyle(NSAlertStyleInformational)
-      alert.setIcon(NSImage.imageNamed(NSImageNameInfo))
-    of warning:
-      alert.setAlertStyle(NSAlertStyleWarning)
-      alert.setIcon(NSImage.imageNamed(NSImageNameCaution))
-    of error:
-      alert.setAlertStyle(NSAlertStyleCritical)
-      # alert.setIcon(NSImage.imageNamed(c"NSImageNameStatusUnavailable"))
-
-  # Set alert properties
-  alert.setShowsHelp(false)
-  alert.setShowsSuppressionButton(false)
-  alert.setMessageText(@title)
-  alert.setInformativeText(@description)
-
-  # Add button and run the modal
-  alert.addButtonWithTitle(@"OK")
-  alert.runModal()
-  # alert.release()
+  objcr:
+    var a: Id = [NSAlert new]
+    case dt:
+      of info:
+        [a setAlertStyle: NSAlertStyleInformational]
+        [a setIcon: NSImage.imageNamed(NSImageNameInfo)]
+      of warning:
+        [a setAlertStyle: NSAlertStyleWarning]
+        [a setIcon: NSImage.imageNamed(NSImageNameCaution)]
+      of error:
+        [a setAlertStyle: NSAlertStyleCritical]
+        # [a setIcon: NSImage.imageNamed(NSImageNameStatusUnavailable)]
+    [a setShowsHelp: 0]
+    [a setShowsSuppressionButton: 0]
+    [a setMessageText: @title]
+    [a setInformativeText: @description]
+    [a addButtonWithTitle: "OK"]
+    [a runModal]
+    [a release]
 
 proc info*(title: string; description: string) = 
   basicDialog(title, description, info)
@@ -41,41 +37,29 @@ proc warning*(title: string; description: string) =
 proc error*(title: string; description: string) = 
   basicDialog(title, description, error)
 
-proc chooseFile*(completionHandler:  proc (urls: seq[string];), root: string = ""; ) =
-  # var pool = NSAutoreleasePool.alloc().init()
-  var openPanel1 = NSOpenPanel.openPanel()
-  openPanel1.setAllowsMultipleSelection(NO)
-  openPanel1.setCanChooseFiles(YES)
-  # let send = cast[proc(a: ID, b: SEL, c: NSArray[NSURL]){.cdecl, gcsafe.}](objc_msgSend)
-  let b2 = toBlock() do(r: int):
-    var urls = newSeq[string]()
-    if r == NSModalResponseOK:
-      for url in openPanel1.URLs:
-        urls.add $url.path
-      # send(cast[Id](completionHandler), $$"invoke", urls)
-      completionHandler(urls)
-    else:
-      # send(cast[Id](completionHandler), $$"invoke", nil)
-      completionHandler(urls)
-  openPanel1.beginWithCompletionHandler(b2)
-  # pool.drain
+proc chooseFile*(root: string = ""; completionHandler: Block[OpenCompletionHandler] = nil) =
+  objcr:
+    var openPanel = [NSOpenPanel openPanel]
+    # [openPanel setAllowsMultipleSelection, [parameters allowsMultipleSelection]]
+    [openPanel setCanChooseFiles: 1]
+    let b2 = toBlock() do(r: Id):
+      if r == cast[Id](NSModalResponseOK):
+        objc_msgSend(cast[Id](completionHandler), $$"invoke", objc_msgSend(openPanel, $$"URLs"))
+      else:
+        objc_msgSend(cast[Id](completionHandler), $$"invoke", nil)
+    [openPanel beginWithCompletionHandler: b2]
 
-proc saveFile*(completionHandler: proc(a: string), root = ""; filename = "") =
-  # var pool = NSAutoreleasePool.alloc().init()
-  var savePanel = NSSavePanel.savePanel()
-  savePanel.setCanCreateDirectories(YES)
-  # let send = cast[proc(a: ID, b: SEL, c: BOOL, d: NSString){.cdecl, gcsafe.}](objc_msgSend)
+proc saveFile*(root: string = ""; completionHandler: Block[SaveCompletionHandler] = nil) =
+  objcr:
+    var savePanel = [NSSavePanel savePanel]
+    [savePanel setCanCreateDirectories: 1]
+    # [savePanel setNameFieldStringValue: filename]
+    let blk = toBlock() do(r: Id):
+      if r == cast[Id](NSModalResponseOK):
+        var url: Id = objc_msgSend(savePanel, $$"URL")
+        var path: Id = objc_msgSend(url, $$"path")
+        objc_msgSend(cast[Id](completionHandler), $$"invoke", 1, path)
+      else:
+        objc_msgSend(cast[Id](completionHandler), $$"invoke", No, nil)
 
-  if filename.len > 0:
-    savePanel.setNameFieldStringValue(@filename)
-  let blk = toBlock() do(r: int):
-    if r == NSModalResponseOK:
-      var url = savePanel.URL
-      var path = url.path
-      completionHandler(path)
-      # send(cast[Id](completionHandler), $$"invoke", YES, path)
-    else:
-      completionHandler("")
-      # send(cast[Id](completionHandler), $$"invoke", No, nil)
-  savePanel.beginWithCompletionHandler(blk)
-  # pool.drain
+    [savePanel beginWithCompletionHandler: blk]

@@ -1,0 +1,25 @@
+# Nim build artifacts
+nimcache/
+*.exe
+*.obj
+*.o
+*.dll
+*.lib
+*.exp
+*.manifest
+*.pdb
+*.ilk
+
+# Generated resource files
+*.res
+newres.res
+
+# Editor / OS files
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Nimble (if used later)
+*.nimble.lock

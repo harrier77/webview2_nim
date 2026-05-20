@@ -1,0 +1,42 @@
+<html>
+<head>
+  <script>
+    // Callback infrastructure to receive responses from Nim
+    window._nimCallbacks = {};
+    window._nimCallbackId = 0;
+
+    // Expose the Nim API to JavaScript functions
+    window.api = {};
+
+    // printPippo: calls Nim and receives a response
+    api.printPippo = (arg) => {
+      return new Promise((resolve) => {
+        const id = ++window._nimCallbackId;
+        window._nimCallbacks[id] = resolve;
+        window.chrome.webview.postMessage(
+          JSON.stringify({
+            scope: "api",
+            name: "printPippo",
+            args: JSON.stringify(arg),
+            callbackId: id
+          })
+        );
+      });
+    };
+
+    function callNim() {
+      const valore = document.getElementById('inputMsg').value || 'messaggio da js';
+      api.printPippo(valore).then(result => {
+        console.log('Risultato da Nim:', result);
+        document.getElementById('output').textContent = result;
+      });
+    }
+  </script>
+</head>
+<body>
+  <p>Pippo</p>
+  <input id="inputMsg" type="text" value="messaggio da js" placeholder="Inserisci un valore">
+  <button onclick="callNim()">Chiama Nim e ricevi risposta</button>
+  <p id="output"></p>
+</body>
+</html>

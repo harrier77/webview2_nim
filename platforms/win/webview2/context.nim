@@ -1,6 +1,6 @@
 import std/[locks, tables]
 import winim
-import ../../../types
+import types
 
 type
   WebviewContextStoreObj = object

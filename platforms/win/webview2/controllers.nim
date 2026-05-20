@@ -9,7 +9,6 @@ from web_message_received_handler import nil
 from com/icorewebview2domcontentloadedeventhandler import nil
 import std/[os, atomics,pathnorm,sugar,json]
 import loader
-import ../../../types
 
 proc newControllerCompletedHandler*(hwnd: HWND;controller: ptr ICoreWebView2Controller;view: ptr ICoreWebView2; settings: ptr ICoreWebView2Settings): ptr ICoreWebView2CreateCoreWebView2ControllerCompletedHandler =
   result = create(type result[])
@@ -65,8 +64,9 @@ proc newControllerCompletedHandler*(hwnd: HWND;controller: ptr ICoreWebView2Cont
                    window.chrome.webview.postMessage(arg);
                     };"""
     discard w.priv.view.AddScriptToExecuteOnDocumentCreated(&script, NULL)
-    if w.entryType == EntryType.html:
-      discard w.priv.view.NavigateToString(T(w.url))
+    if w.initHtml.len > 0:
+      # patch: if embedded HTML is set, use NavigateToString instead of a URL
+      discard w.priv.view.NavigateToString(&T(w.initHtml))
     else:
       discard w.priv.view.Navigate(T(w.url))
     return S_OK

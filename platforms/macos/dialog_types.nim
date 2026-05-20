@@ -1,10 +1,9 @@
 import darwin / [objc/runtime]
-import darwin/foundation/[nsarray,nsurl]
 
-type OpenCompletionHandler* = proc (self: ID;urls: NSArray[NSURL];): void
+type OpenCompletionHandler* = proc (Id: Id): void
 
-type SaveCompletionHandler* = proc (self: ID;allowOverwrite: BOOL; destination: NSString): void
+type SaveCompletionHandler* = proc (allowOverwrite: int; destination: Id): void
 
-type ConfirmCompletionHandler* = proc (self: ID;b: bool): void
+type ConfirmCompletionHandler* = proc (b: bool): void
 
-type AlertCompletionHandler* = proc (self: ID;): void
+type AlertCompletionHandler* = proc (): void

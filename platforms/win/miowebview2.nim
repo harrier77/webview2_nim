@@ -1,4 +1,3 @@
-import ../../types
 import webview2/[types,controllers,context,dialog,com,environment_options,loader]
 import winim
 import winim/inc/winuser
@@ -7,7 +6,7 @@ import std/[os, pathnorm]
 import ./dpi_util
 export types,dialog
 
-
+var miaglob_toolb*:HWND
 const classname = "WebView"
 
 # Window size hints
@@ -31,90 +30,57 @@ type WebviewDispatchCtx2 {.pure.} = object
 
 proc terminate*(w: Webview): void
 proc resize*(w: WebView;): void
-proc embed*( w: WebView)
+#proc embed*( w: WebView)
 
-proc wndproc(hwnd: HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM): LRESULT {.stdcall.} =
+proc mio_move_client*(w: WebView,miotop=cast[LONG](62)): void =
+  var bounds: RECT
+  let g = GetClientRect(w.priv.windowHandle, bounds)
+  doAssert g == TRUE, $GetLastError()
+  doAssert w.priv.controller != nil
+  bounds.top=miotop
+  discard w.priv.controller.put_Bounds(bounds)
+  #var childtoolb:HWND = FindWindowEx(w.priv.windowHandle, cast[HWND](0),  "WebView", cast[LPCWSTR](0));
+  #echo repr(childtoolb) 
+  MoveWindow(miaglob_toolb,0,0,1920,0,true)
+  #UpdateWindow(miatoolb)
+  #SendMessage(miatoolb,TB_AUTOSIZE, 0, 0)
+  UpdateWindow(w.priv.windowHandle)
+
+
+  
+proc wndproc*(hwnd: HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM): LRESULT {.stdcall.} =
     var w = cast[Webview](GetWindowLongPtr(hwnd, GWLP_USERDATA))
     case msg
       of WM_SIZE:
         if w.priv.controller != nil:
           # SetWindowLongPtr trigger WM_SIZE too, controller has not initlization yet
           w.resize()
+          w.mio_move_client()
       of WM_CREATE:
         var
           pCreate = cast[ptr CREATESTRUCT](lParam)
           p = cast[LONG_PTR](pCreate.lpCreateParams)
         hwnd.SetWindowLongPtr(GWLP_USERDATA, p)
+        #w.mio_move_client()
+        #echo "miowebview2.nim  wndproc"
       of WM_CLOSE:
+        echo "msg WM_CLOSE..."
         DestroyWindow(hwnd)
+        ShowWindow(w.priv.windowHandle, SW_HIDE)
       of WM_DESTROY:
+        echo "msg WM_DESTROY..."
         w.terminate()
         return TRUE
+      #of WM_COMMAND:
+        #toolb_commands(wParam,w)
       else:
         return DefWindowProc(hwnd, msg, wParam, lParam)
 
-proc  webview_init*(w: Webview): cint =
-  var wc:WNDCLASSEX
-  var hInstance:HINSTANCE
-  var style:DWORD
-  var clientRect:RECT
-  var rect:RECT
-
-  hInstance = GetModuleHandle(NULL)
-  if hInstance == 0:
-    return -1
-  if OleInitialize(NULL) != S_OK:
-    return -1
-  ZeroMemory(&wc, sizeof(WNDCLASSEX))
-  wc.cbSize = sizeof(WNDCLASSEX).UINT
-  wc.hInstance = hInstance
-  wc.lpfnWndProc = wndproc
-  wc.lpszClassName = classname
-  RegisterClassExW(&wc)
-
-  style = WS_OVERLAPPEDWINDOW
-  # if not w.resizable:
-  #   style = WS_OVERLAPPED or WS_CAPTION or WS_MINIMIZEBOX or WS_SYSMENU
-  rect.top = 0
-  rect.left = 0
-  rect.right = w.width.LONG
-  rect.bottom = w.height.LONG
-  AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, 0)
-
-  GetClientRect(GetDesktopWindow(), &clientRect)
-  let left = (clientRect.right div 2) - ((rect.right - rect.left) div 2)
-  let top = (clientRect.bottom div 2) - ((rect.bottom - rect.top) div 2)
-  rect.right = rect.right - rect.left + left
-  rect.left = left
-  rect.bottom = rect.bottom - rect.top + top
-  rect.top = top
-  setDpiAwareness(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE)
-  w.priv.windowHandle = CreateWindowW(classname, w.title, style, rect.left, rect.top,
-    rect.right - rect.left, rect.bottom - rect.top,
-    HWND_DESKTOP, cast[HMENU](NULL), hInstance, cast[LPVOID](w))
-  if (w.priv.windowHandle == 0):
-    OleUninitialize()
-    return -1
-
-  # SetWindowLongPtr(w.priv.windowHandle, GWLP_USERDATA, cast[LONG_PTR](w))
-  # webviewContext.set(w.priv.windowHandle, w)
-  # discard DisplayHTMLPage(w)
-  SetWindowText(w.priv.windowHandle, w.title)
-  ShowWindow(w.priv.windowHandle, SW_SHOW)
-  UpdateWindow(w.priv.windowHandle)
-  SetFocus(w.priv.windowHandle)
-  try:
-    if CoInitializeEx(nil, COINIT_APARTMENTTHREADED).FAILED: raise
-    defer: CoUninitialize()
-  except:
-    discard
-
-  w.embed()
-  return 0
 
 proc run*(w: Webview) =
   ## `run` starts the main UI loop until the user closes the window or `exit()` is called.
   var msg: MSG
+  
   while GetMessage(msg.addr, 0, 0, 0) != -1:
     if msg.hwnd != 0:
       TranslateMessage(msg.addr)
@@ -129,6 +95,7 @@ proc run*(w: Webview) =
     of WM_COMMAND,
       WM_KEYDOWN,
       WM_KEYUP:
+      echo "WM_COMMAND / keyboard message"
       if (msg.wParam == VK_F5):
         return
     else:
@@ -136,10 +103,13 @@ proc run*(w: Webview) =
 
 proc terminate*(w: Webview): void =
   PostQuitMessage(0)
+  echo "terminate procedure completed..."
 
 proc destroy*(w: Webview): void =
   w.terminate()
 
+
+  
 proc setTitle*(w: Webview; title: string ): void =
   discard SetWindowTextW(w.priv.windowHandle, &T(title))
 
@@ -190,43 +160,7 @@ proc resize*(w: WebView;): void =
   doAssert w.priv.controller != nil
   discard w.priv.controller.put_Bounds(bounds)
 
-proc embed*( w: WebView) =
-  let exePath = getAppFilename()
-  var (dir, name, ext) = splitFile(exePath)
-  var dataPath = normalizePath(getEnv("AppData") / name)
-  createDir(dataPath)
-  # var versionInfo: LPWSTR
-  # GetAvailableCoreWebView2BrowserVersionString(NULL, versionInfo.addr)
-  # echo versionInfo
-  # CoTaskMemFree(versionInfo)
-  var controllerCompletedHandler = newControllerCompletedHandler(w.priv.windowHandle, w.priv.controller, w.priv.view, w.priv.settings)
-  var environmentCompletedHandler = newEnvironmentCompletedHandler(w.priv.windowHandle, controllerCompletedHandler)
-  var options = create(ICoreWebView2EnvironmentOptions)
-  options.lpVtbl = create(ICoreWebView2EnvironmentOptionsVTBL)
-  options.lpVtbl.QueryInterface = environment_options.QueryInterface
-  options.lpVtbl.AddRef = environment_options.AddRef
-  options.lpVtbl.Release = environment_options.Release
-  options.lpVtbl.get_AdditionalBrowserArguments = environment_options.get_AdditionalBrowserArguments
-  options.lpVtbl.put_AdditionalBrowserArguments = environment_options.put_AdditionalBrowserArguments
-  options.lpVtbl.get_Language = environment_options.get_Language
-  options.lpVtbl.put_Language = environment_options.put_Language
-  options.lpVtbl.get_TargetCompatibleBrowserVersion = environment_options.get_TargetCompatibleBrowserVersion
-  options.lpVtbl.put_TargetCompatibleBrowserVersion = environment_options.put_TargetCompatibleBrowserVersion
-  options.lpVtbl.get_AllowSingleSignOnUsingOSPrimaryAccount = environment_options.get_AllowSingleSignOnUsingOSPrimaryAccount
-  options.lpVtbl.put_AllowSingleSignOnUsingOSPrimaryAccount = environment_options.put_AllowSingleSignOnUsingOSPrimaryAccount
-  options.lpVtbl.get_ExclusiveUserDataFolderAccess = environment_options.get_ExclusiveUserDataFolderAccess
-  options.lpVtbl.put_ExclusiveUserDataFolderAccess = environment_options.put_ExclusiveUserDataFolderAccess
 
-  let r1 = CreateCoreWebView2EnvironmentWithOptions("", dataPath, options, environmentCompletedHandler)
-
-  doAssert r1 == S_OK, "failed to call CreateCoreWebView2EnvironmentWithOptions"
-  # simulate synchronous
-  # https://github.com/MicrosoftEdge/WebView2Feedback/issues/740
-  assert w.created == false
-  var msg: MSG
-  while w.created == false and GetMessage(msg.addr, 0, 0, 0).bool:
-    TranslateMessage(msg.addr)
-    DispatchMessage(msg.addr)
 
 proc addUserScriptAtDocumentStart*(w: WebView; script: string) =
   var script = T(script)
@@ -244,13 +178,14 @@ proc addUserScriptAtDocumentEnd*(w: WebView; script: string) =
       sender: ptr ICoreWebView2;
       args: ptr ICoreWebView2DOMContentLoadedEventArgs): HRESULT {.stdcall.} =
     var script = T(self.script)
-    sender.ExecuteScript(&script, NUll)
+    sender.ExecuteScript(&script, NULL)  # patch: fixed typo NUll -> NULL
 
   discard w.priv.view.add_DOMContentLoaded(handler, token.addr)
 
-# when isMainModule:
-#   SetCurrentProcessExplicitAppUserModelID("webview2 app")
-#   var v = newWebView()
-#   assert v.webview_init() == 0
+when isMainModule:
+  SetCurrentProcessExplicitAppUserModelID("webview2 app")
+  #import ../../webview.nim  # does not work here
+  var v = newWebView()
+  assert v.webview_init() == 0
 
-#   v.run
+  v.run

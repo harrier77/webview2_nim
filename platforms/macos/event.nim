@@ -1,5 +1,5 @@
 import objc_runtime
-import darwin / [app_kit, foundation, objc/runtime]
+import darwin / [app_kit, foundation, objc/runtime, objc/blocks, core_graphics/cggeometry]
 
 var handler* = proc (event: Id): Id {.closure.} =
     objcr:

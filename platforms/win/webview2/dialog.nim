@@ -65,10 +65,6 @@ proc chooseFiles*(root: string = "", description: string = ""): seq[string] {.di
     else:
       add(result, path)
 
-proc chooseFile*(cb: proc (a: seq[string]); root = "") =
-  let files = chooseFiles(root, "")
-  cb(files)
-
 proc saveFile*(root: string = "", description: string = ""): string {.discardable.} =
   var
     opf: OPENFILENAMEW
@@ -85,10 +81,6 @@ proc saveFile*(root: string = "", description: string = ""): string {.discardabl
     result = $(&buf)
   else:
     result = ""
-
-proc saveFile*(cb: proc (a: string); root = ""; filename = "") =
-  let path = saveFile(root)
-  cb(path)
 
 proc chooseDir*(root: string = "", description: string = ""): string {.discardable.} =
   var
