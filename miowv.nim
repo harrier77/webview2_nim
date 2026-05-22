@@ -203,7 +203,7 @@ proc  miowebview_init*(w: Webview): cint =
     discard
   w.mio_embed()
 
-  w.mio_move_client()
+  w.mio_move_client(w.miotop)
   return 0
 
 
@@ -394,7 +394,8 @@ proc run*(w: Webview; quitProc: proc () {.noconv.}; controlCProc: proc () {.noco
 
 
 proc mio_new_webview*(path: string = ""; title = ""; width: Positive = 1000; height: Positive = 700;
-    resizable: bool = true; debug: bool = not defined(release); callback: ExternalInvokeCb = nil): Webview =
+    resizable: bool = true; debug: bool = not defined(release); callback: ExternalInvokeCb = nil;
+    miotop: LONG = 62): Webview =
     result = create(WebviewObj)
     result.title = title
     if path == "":
@@ -407,11 +408,12 @@ proc mio_new_webview*(path: string = ""; title = ""; width: Positive = 1000; hei
     result.resizable = resizable
     result.debug = true
     result.invokeCb = generalExternalInvokeCallback
+    result.miotop = miotop
     if callback != nil: result.externalInvokeCB = callback
     ##
     if result.miowebview_init() != 0: return nil ## calls miowebview_init (defined in miowv.nim)
     ##
-    mio_move_client(result)
+    mio_move_client(result, result.miotop)
 #####
 
 

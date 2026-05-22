@@ -17,6 +17,7 @@ type
     created*: bool
     onOpenFile*: OnOpenFile
     initHtml*: string  # patch: embedded HTML loaded at startup via NavigateToString (instead of navigating to a URL)
+    miotop*: LONG      # top offset for WebView bounds (0 = full client area; 62 = legacy toolbar space)
   WebviewPrivObj* = object
     windowHandle*: HWND
     view*: ptr ICoreWebView2

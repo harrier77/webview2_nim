@@ -32,7 +32,7 @@ proc terminate*(w: Webview): void
 proc resize*(w: WebView;): void
 #proc embed*( w: WebView)
 
-proc mio_move_client*(w: WebView,miotop=cast[LONG](62)): void =
+proc mio_move_client*(w: WebView,miotop=cast[LONG](0)): void =
   var bounds: RECT
   let g = GetClientRect(w.priv.windowHandle, bounds)
   doAssert g == TRUE, $GetLastError()
@@ -55,7 +55,7 @@ proc wndproc*(hwnd: HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM): LRESULT {.
         if w.priv.controller != nil:
           # SetWindowLongPtr trigger WM_SIZE too, controller has not initlization yet
           w.resize()
-          w.mio_move_client()
+          w.mio_move_client(w.miotop)
       of WM_CREATE:
         var
           pCreate = cast[ptr CREATESTRUCT](lParam)
