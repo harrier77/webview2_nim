@@ -191,9 +191,10 @@ proc  miowebview_init*(w: Webview): cint =
     return -1
   SetWindowText(w.priv.windowHandle, w.title)
   ShowWindow(w.priv.windowHandle, SW_SHOW)
-  #miatoolb = custom_toolb(w, g_hInstance)
-  #miaglob_toolb=miatoolb
-  #ShowWindow(miatoolb, SW_SHOW)
+  if w.miotop != 0:
+    let miatoolb = custom_toolb(w.priv.windowHandle, g_hInstance)
+    miaglob_toolb = miatoolb
+    ShowWindow(miatoolb, SW_SHOW)
   UpdateWindow(w.priv.windowHandle)
   SetFocus(w.priv.windowHandle)
   try:
@@ -395,7 +396,7 @@ proc run*(w: Webview; quitProc: proc () {.noconv.}; controlCProc: proc () {.noco
 
 proc mio_new_webview*(path: string = ""; title = ""; width: Positive = 1000; height: Positive = 700;
     resizable: bool = true; debug: bool = not defined(release); callback: ExternalInvokeCb = nil;
-    miotop: LONG = 62): Webview =
+    miotop: LONG = TOOLBAR_HEIGHT): Webview =
     result = create(WebviewObj)
     result.title = title
     if path == "":
@@ -423,7 +424,7 @@ proc mioMaximize*(v:Webview):void=
 
 
 when isMainModule:
-  var w = mio_new_webview(width=1000, height=1000)
+  var w = mio_new_webview(path="http://localhost:8080",width=1000, height=1000)
   w.externalInvokeCB = proc (w: Webview; arg: cstring) =
     try:
       let json = parseJson($arg)

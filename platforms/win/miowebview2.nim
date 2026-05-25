@@ -1,12 +1,20 @@
 import webview2/[types,controllers,context,dialog,com,environment_options,loader]
 import winim
 import winim/inc/winuser
+import winim/inc/commctrl
 import winim/[utils]
 import std/[os, pathnorm]
 import ./dpi_util
 export types,dialog
 
 var miaglob_toolb*:HWND
+
+# Toolbar command IDs
+const
+  ID_REFRESH* = 101
+  ID_BACK* = 102
+  ID_FORWARD* = 103
+
 const classname = "WebView"
 
 # Window size hints
@@ -32,6 +40,8 @@ proc terminate*(w: Webview): void
 proc resize*(w: WebView;): void
 #proc embed*( w: WebView)
 
+const TOOLBAR_HEIGHT* = 30  ## Default toolbar height in pixels
+
 proc mio_move_client*(w: WebView,miotop=cast[LONG](0)): void =
   var bounds: RECT
   let g = GetClientRect(w.priv.windowHandle, bounds)
@@ -39,30 +49,95 @@ proc mio_move_client*(w: WebView,miotop=cast[LONG](0)): void =
   doAssert w.priv.controller != nil
   bounds.top=miotop
   discard w.priv.controller.put_Bounds(bounds)
-  #var childtoolb:HWND = FindWindowEx(w.priv.windowHandle, cast[HWND](0),  "WebView", cast[LPCWSTR](0));
-  #echo repr(childtoolb) 
-  MoveWindow(miaglob_toolb,0,0,1920,0,true)
-  #UpdateWindow(miatoolb)
-  #SendMessage(miatoolb,TB_AUTOSIZE, 0, 0)
+  # Resize toolbar to fill the full width of the parent window
+  if miaglob_toolb != 0:
+    MoveWindow(miaglob_toolb, 0, 0, bounds.right - bounds.left, TOOLBAR_HEIGHT, TRUE)
   UpdateWindow(w.priv.windowHandle)
 
 
   
+proc custom_toolb*(parent: HWND, hInstance: HINSTANCE): HWND =
+  ## Create a toolbar with navigation buttons (Back, Forward, Refresh)
+  InitCommonControls()
+
+  # Get parent client width for initial toolbar sizing
+  var parentRect: RECT
+  GetClientRect(parent, parentRect.addr)
+  let parentW = parentRect.right - parentRect.left
+
+  let hwndToolbar = CreateWindowEx(
+    0, TOOLBARCLASSNAME, nil,
+    WS_CHILD or WS_VISIBLE or TBSTYLE_FLAT or TBSTYLE_TOOLTIPS,
+    0, 0, parentW, TOOLBAR_HEIGHT,
+    parent, cast[HMENU](0), hInstance, nil
+  )
+  if hwndToolbar == 0:
+    return 0
+
+  # Tell toolbar the TBBUTTON structure size (compatibility)
+  SendMessage(hwndToolbar, TB_BUTTONSTRUCTSIZE, sizeof(TBBUTTON), 0)
+
+  # Set explicit button dimensions: 60px wide x 26px tall
+  SendMessage(hwndToolbar, TB_SETBUTTONSIZE, 0, MAKELPARAM(60, 26))
+
+  # Allocate wide strings for button labels
+  let backText = T("  Back  ")
+  let fwdText = T("  Forward  ")
+  let refText = T("  Refresh  ")
+
+  # Define buttons
+  var buttons: array[3, TBBUTTON]
+  zeroMem(addr buttons, sizeof(buttons))
+
+  # Button 1: Back
+  buttons[0].iBitmap = I_IMAGENONE
+  buttons[0].idCommand = ID_BACK
+  buttons[0].fsState = TBSTATE_ENABLED
+  buttons[0].fsStyle = BTNS_BUTTON or BTNS_AUTOSIZE
+  buttons[0].dwData = 0
+  buttons[0].iString = cast[INT_PTR](&backText)
+
+  # Button 2: Forward
+  buttons[1].iBitmap = I_IMAGENONE
+  buttons[1].idCommand = ID_FORWARD
+  buttons[1].fsState = TBSTATE_ENABLED
+  buttons[1].fsStyle = BTNS_BUTTON or BTNS_AUTOSIZE
+  buttons[1].dwData = 0
+  buttons[1].iString = cast[INT_PTR](&fwdText)
+
+  # Button 3: Refresh
+  buttons[2].iBitmap = I_IMAGENONE
+  buttons[2].idCommand = ID_REFRESH
+  buttons[2].fsState = TBSTATE_ENABLED
+  buttons[2].fsStyle = BTNS_BUTTON or BTNS_AUTOSIZE
+  buttons[2].dwData = 0
+  buttons[2].iString = cast[INT_PTR](&refText)
+
+  discard SendMessage(hwndToolbar, TB_ADDBUTTONS, 3, cast[LPARAM](addr buttons))
+
+  # Auto-size the toolbar after buttons are added
+  SendMessage(hwndToolbar, TB_AUTOSIZE, 0, 0)
+
+  # Force the toolbar to repaint
+  InvalidateRect(hwndToolbar, nil, TRUE)
+  UpdateWindow(hwndToolbar)
+
+  return hwndToolbar
+
+
+
 proc wndproc*(hwnd: HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM): LRESULT {.stdcall.} =
     var w = cast[Webview](GetWindowLongPtr(hwnd, GWLP_USERDATA))
     case msg
-      of WM_SIZE:
-        if w.priv.controller != nil:
-          # SetWindowLongPtr trigger WM_SIZE too, controller has not initlization yet
-          w.resize()
-          w.mio_move_client(w.miotop)
       of WM_CREATE:
         var
           pCreate = cast[ptr CREATESTRUCT](lParam)
           p = cast[LONG_PTR](pCreate.lpCreateParams)
         hwnd.SetWindowLongPtr(GWLP_USERDATA, p)
-        #w.mio_move_client()
-        #echo "miowebview2.nim  wndproc"
+      of WM_SIZE:
+        if w != nil and w.priv.controller != nil:
+          w.resize()
+          w.mio_move_client(w.miotop)
       of WM_CLOSE:
         echo "msg WM_CLOSE..."
         DestroyWindow(hwnd)
@@ -71,8 +146,27 @@ proc wndproc*(hwnd: HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM): LRESULT {.
         echo "msg WM_DESTROY..."
         w.terminate()
         return TRUE
-      #of WM_COMMAND:
-        #toolb_commands(wParam,w)
+      of WM_COMMAND:
+        # Handle toolbar button clicks
+        let cmdId = LOWORD(wParam)
+        if w != nil:
+          case cmdId
+            of ID_REFRESH:
+              if w.priv.view != nil:
+                echo "[toolbar] Refresh clicked"
+                discard w.priv.view.ExecuteScript(&T("location.reload()"), nil)
+            of ID_BACK:
+              if w.priv.view != nil:
+                echo "[toolbar] Back clicked"
+                discard w.priv.view.GoBack()
+            of ID_FORWARD:
+              if w.priv.view != nil:
+                echo "[toolbar] Forward clicked"
+                discard w.priv.view.GoForward()
+            else:
+              return DefWindowProc(hwnd, msg, wParam, lParam)
+        else:
+          return DefWindowProc(hwnd, msg, wParam, lParam)
       else:
         return DefWindowProc(hwnd, msg, wParam, lParam)
 
